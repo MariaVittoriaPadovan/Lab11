@@ -15,7 +15,7 @@ class Controller:
         try:
             year_n = int(year)
         except (ValueError, TypeError):
-            self._view.show_alert("Inserisci un valore numerico nel campo anno.")
+            self._view.show_alert("Inserisci u n valore numerico nel campo anno.")
             return
 
         if year_n < 1950 or year_n > 2024:
