@@ -10,7 +10,7 @@ class Controller:
         self._current_rifugio = None
 
     def handle_calcola(self, e):
-        """Callback per il bottone 'Calcola sentieri'."""
+        """Callback per il bottone 'Calcola sentier i'."""
         year = self._view.txt_anno.value
         try:
             year_n = int(year)
