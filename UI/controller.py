@@ -10,12 +10,12 @@ class Controller:
         self._current_rifugio = None
 
     def handle_calcola(self, e):
-        """Callback per il bottone 'Calcola sentier i'."""
+        """Callback per il bottone 'Calcola sentieri'."""
         year = self._view.txt_anno.value
         try:
             year_n = int(year)
         except (ValueError, TypeError):
-            self._view.show_alert("Inserisci u n valore numerico nel campo anno.")
+            self._view.show_alert("Inserisci un valore numerico nel campo anno.")
             return
 
         if year_n < 1950 or year_n > 2024:
