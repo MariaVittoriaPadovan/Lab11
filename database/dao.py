@@ -1,4 +1,5 @@
 from database.DB_connect import DBConnect
+from model.connessione import Connessione
 from model.rifugio import Rifugio
 
 class DAO:
@@ -7,29 +8,35 @@ class DAO:
         """
     # TODO
     @staticmethod
-    def get_all_rifugi():
+    def get_all_rifugi(year): #voglio solo i rifugi che esistono prima di un certo anno
         """
         Restituisce tutti i rifugi presenti nella tabella come lista di OGGETTI Rifugio
         """
         conn = DBConnect.get_connection()
+        rifugi= {}
         cursore = conn.cursor(dictionary=True)
 
-        query = "SELECT * FROM rifugio"
-        cursore.execute(query)
+        query = ('''SELECT DISTINCT r.id, r.nome, r.localita, r.altitudine, r.capienza, r.aperto
+                    FROM rifugio r, connessione c
+                    WHERE c.anno <= %s and (r.id = c.id_rifugio1 or r.id = c.id_rifugio2)
+                    ORDER BY r.nome
+                    ''')
+        # (r.id=c.id_rifugio1 or r.id=c.id_rifugio2) verifico che o un sentiero parta da quel rifugio o che un sentiero
+        # arrivi a quel rifugio, quindi verifico che il rifugio abbia delle connessioni
 
-        risultato = []
+        cursore.execute(query, (year,))
+
         for riga in cursore:
-            risultato.append(Rifugio(
-                riga['id'], riga['nome'], riga['localita'], riga['altitudine'],
-                riga['capienza'], riga['aperto']
-            ))
+            if rifugi.get(riga['id']) is None: #se il rofugio non è presente nel mio dizionario
+                rifugi[riga['id']] = Rifugio(**riga)
+
         cursore.close()
         conn.close()
 
-        return risultato
+        return rifugi
 
     @staticmethod
-    def get_connessione_per_anno(year: int):
+    def get_connessioni(rifugi, year):
         """
         Restituisce tutte le connessioni con anno
         Risultato è una lista di dizionari, ad esempio:
@@ -37,43 +44,28 @@ class DAO:
         """
         conn = DBConnect.get_connection()
         cursore = conn.cursor(dictionary=True)
+        connessioni = {}
 
+        #non conta la direzione dei percorsi, sono sempre da rifugi diversi, quindi posso non usare LEAST or GREATEST
+        # (sempre meglio metterli se non so com'è fatto il database, all'esame meglio metterlo)
         query = """
-                SELECT id_rifugio1, id_rifugio2
+                SELECT id_rifugio1, id_rifugio2, distanza, difficolta, durata
                 FROM connessione
-                WHERE anno <= %s \
+                WHERE anno <= %s 
                 """
 
         cursore.execute(query, (year,))
-        risultato = cursore.fetchall()
 
-        cursore.close()
-        conn.close()
-
-        return risultato
-
-
-    @staticmethod
-    def get_rifugio_by_id(id_rifugio: int):
-        """
-        Recupera un rifugio specifico tramite il suo ID e lo restituisce come OGGETTO Rifugio.
-        """
-        conn = DBConnect.get_connection()
-        cursore = conn.cursor(dictionary=True)
-
-        query = "SELECT * FROM rifugio WHERE id = %s"
-
-        cursore.execute(query, (id_rifugio,))
-
-        risultato=[]
         for riga in cursore:
-            risultato.append(Rifugio(
-                riga['id'], riga['nome'],
-                riga['localita'], riga['altitudine'],
-                riga['capienza'], riga['aperto']
-            ))
+            r1=rifugi.get(riga['id_rifugio1']) #rifugio di partenza
+            r2=rifugi.get(riga['id_rifugio2']) #rifugio di arrivo
+            # !r1 e r2 sono degli oggetti rifugio!
+
+            if r1 is not None and r2 is not None and (r1, r2) not in connessioni:
+                connessioni[r1, r2] = Connessione(r1, r2, riga['distanza'], riga['difficolta'], riga['durata'])
+                #dizionario che ha come chiave la coppia (r1, r2) e come valore un oggetto Connessione
 
         cursore.close()
         conn.close()
 
-        return risultato
+        return connessioni

@@ -1,9 +1,16 @@
 import networkx as nx
 from database.dao import DAO
+from datetime import datetime
 
 class Model:
     def __init__(self):
+
+        # definite da me
+        self.rifugi = None
+        self.connessioni = None
+
         self.G = nx.Graph()
+
 
     def build_graph(self, year: int):
         """
@@ -13,18 +20,15 @@ class Model:
         :param year: anno limite fino al quale selezionare le connessioni da includere.
         """
         # TODO
+
+        self.rifugi= DAO.get_all_rifugi(year)
+        self.connessioni= DAO.get_connessioni(self.rifugi, year)
+
         self.G.clear()
 
-        connessioni = DAO.get_connessione_per_anno(year)
+        self.G.add_nodes_from(self.rifugi.values())
+        self.G.add_edges_from([(c.r1, c.r2) for c in self.connessioni.values()])
 
-        for c in connessioni:
-            r1 = c['id_rifugio1']
-            r2 = c['id_rifugio2']
-
-            # Aggiungo nodi e archi senza pesi
-            self.G.add_node(r1)
-            self.G.add_node(r2)
-            self.G.add_edge(r1, r2)
 
     def get_nodes(self):
         """
@@ -33,16 +37,8 @@ class Model:
         """
         # TODO
 
-        lista_oggetti_rifugio = []
-        for id_rifugio in self.G.nodes:
-            # Chiama il DAO che restituisce una lista di oggetti Rifugio.
-            risultato_dao = DAO.get_rifugio_by_id(id_rifugio)
+        return list(self.G.nodes())
 
-            # Se la lista non è vuota, estraiamo l'oggetto.
-            if risultato_dao:
-                lista_oggetti_rifugio.append(risultato_dao[0])
-
-        return lista_oggetti_rifugio
 
     def get_num_neighbors(self, node):
         """
@@ -52,13 +48,8 @@ class Model:
         """
         # TODO
 
-        # Il Controller passa l'OGGETTO Rifugio, uso l'attributo .id per interrogarne il grado
-        node_id = node.id
+        return len(list(self.G.neighbors(node)))
 
-        if node_id in self.G:
-            return self.G.degree[node_id]
-        else:
-            return 0
 
     def get_num_connected_components(self):
         """
@@ -68,47 +59,6 @@ class Model:
         # TODO
         return nx.number_connected_components(self.G)
         #è una funzione di NetworkX e serve per calcolare quante componenti connesse ha un grafo non orientato
-
-
-
-    def get_reachable_dfs_tree(self, start_id: int):
-        """
-        Trova i nodi raggiungibili usando nx.dfs_tree().
-        :param start_id: ID del nodo di partenza.
-        :return: Lista di ID dei nodi raggiungibili (escluso il nodo di partenza).
-        """
-        dfs_graph = nx.dfs_tree(self.G, source=start_id) # nx.dfs_tree() restituisce un grafo contenente tutti i nodi raggiungibili
-        reachable_ids = list(dfs_graph.nodes) # il .nodes() fornisce gli ID
-
-        if start_id in reachable_ids:
-            reachable_ids.remove(start_id) #rimuove il nodo di partenza
-
-        return reachable_ids
-
-    def get_reachable_ricorsivo(self, start_id: int):
-        """
-                Algoritmo DFS ricorsivo. Restituisce lista di ID.
-        """
-
-        visitati = set() # Inizializzo l'insieme dei nodi visitati
-
-        def dfs(u):
-            # Segna u come visitato all'inizio della chiamata ricorsiva
-            if u not in visitati:
-                visitati.add(u)
-                for v in self.G.neighbors(u):
-                    dfs(v)
-
-        if start_id not in self.G:
-            return []
-
-        dfs(start_id)
-
-        # gestione del nodo iniziale per l'algoritmo ricorsivo
-        if start_id in visitati:
-            visitati.remove(start_id)
-
-        return list(visitati)
 
 
     def get_reachable(self, start):
@@ -130,23 +80,92 @@ class Model:
 
         # TODO
 
-        start_id = start.id #estraggo l'ID dall'oggetto Rifugio
-        if start_id not in self.G:
-            return []
+        tic = datetime.now()
+        a = self.get_reachable_dfs_tree(start)
+        print(f"DFS: {datetime.now() - tic} - {len(a)}")
 
-        #eseguo l'algoritmo (che restituisce una lista di ID)
-        a_reachable_ids = self.get_reachable_dfs_tree(start_id)
-        #eseguo la seconda tecnica
-        b_reachable_ids =self.get_reachable_ricorsivo(start_id)
+        tic = datetime.now()
+        b = self.get_reachable_bfs_tree(start)
+        print(f"BFS: {datetime.now() - tic} - {len(b)}")
 
-        #converto gli ID in OGGETTI Rifugio per il Controller
-        reachable_objects = []
-        for id_rifugio in a_reachable_ids:
-            risultato_dao = DAO.get_rifugio_by_id(id_rifugio) # il DAO restituisce una lista con 0 o 1 oggetto
+        tic = datetime.now()
+        c = self.get_reachable_iterative(start)
+        print(f"ITER: {datetime.now() - tic} - {len(c)}")
 
-            #se la lista non è vuota, aggiungo l'oggetto
-            if risultato_dao:
-                reachable_objects.append(risultato_dao[0])
+        tic = datetime.now()
+        d = self.get_reachable_recursive(start)
+        print(f"REC: {datetime.now() - tic} - {len(d)}")
 
-        return reachable_objects
+        return a
 
+
+    def get_reachable_bfs_tree(self, start):
+        """Usa networkx.bfs_tree per ottenere i nodi raggiungibili (esclude il nodo iniziale)."""
+        # Va per livelli: prima tutti i nodi vicini, poi quelli a distanza maggiore (Queue)
+        tree=nx.bfs_tree(self.G, start)
+        nodi=list(tree.nodes)
+        if start in nodi:
+            nodi.remove(start)
+        return nodi
+
+    def get_reachable_dfs_tree(self, start):
+        """Usa networkx.dfs_tree per ottenere i nodi raggiungibili (esclude il nodo iniziale)."""
+        # Va in profondità lungo un ramo finché possibile, poi torna indietro (backtracking) (Stack).
+        tree = nx.dfs_tree(self.G, start)
+        nodes = list(tree.nodes)
+        if start in nodes:
+            nodes.remove(start)
+        return nodes
+
+    def get_reachable_iterative(self, start):
+        """Implementazione iterativa (simile a BFS) che restituisce tutti i nodi raggiungibili."""
+        from collections import deque
+        #metodo che mi permette di creare una simil-lista che mi permette di prendere sia gli ultimi elementi della lista, sia
+        #quelli iniziali
+
+        visited = []
+        to_be_visited = deque()  # una double-ended queue (coda a doppia estremità)
+        #posso gestire gli elementi dalle doppie estremità, sia dall'inizio che dalla fine
+
+        # add starting node to visited
+        visited.append(start) #appendo alla lista il mio elemento di partenza
+
+        # add neighbors of starting node to queue
+        to_be_visited.extend(self.G.neighbors(start)) #estendo la coda con tutti i vicini al nodo di partenza
+
+        while to_be_visited: #contnua finchè la lista to_be_visited non è finita
+            temp = to_be_visited.popleft()  # prende l'elemento in testa alla coda, lo rimuove da to_be_visited e lo aggiunge a temp
+
+            # mark visited
+            visited.append(temp)
+
+            neighbors = list(self.G.neighbors(temp))
+
+            # filter neighbors already visited
+            neighbors = [n for n in neighbors if n not in visited]
+
+            # filter neighbors already in to_be_visited
+            neighbors = [n for n in neighbors if n not in to_be_visited]
+
+            # enqueue remaining
+            to_be_visited.extend(neighbors) #aggiungo gli elementi che non ho già visitato, ma che voglio visitare alla fine di to_be_visited
+
+        # remove starting node from result
+        if start in visited:
+            visited.remove(start)
+        return visited
+
+    def get_reachable_recursive(self, start): #start è il nodo che passo da parametro
+        """Versione ricorsiva (DFS) per ottenere i nodi raggiungibili."""
+        visited = [] #lista di nodi visitati
+        self._recursive_visit(start, visited) #funzione di ricorsione
+        if start in visited: #punto limite
+            visited.remove(start)
+        return visited
+
+    def _recursive_visit(self, node, visited):
+        visited.append(node) #metto il nodo che sto passando da parametro come visitato
+        for neigh in self.G.neighbors(node): #prendo tutti gli elementi vicini a quel nodo specifico
+            if neigh not in visited: #man mano che vedo tutti i possibili vicini, controllo di non aver già visitato quel nodo
+                #quando non ho più nodi da visitare finisce
+                self._recursive_visit(neigh, visited) #replico sul nuovo nodo vicino

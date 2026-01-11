@@ -7,15 +7,14 @@ class Rifugio:
     localita : str
     altitudine : int
     capienza : int
-    aperto : int
+    aperto : bool
 
-
-    def __hash__(self):
-        return hash(self.id)
-
-    def __eq__(self, other):
-        return isinstance(other, Rifugio) and self.id == other.id
 
     def __str__(self):
         return f"[{self.id}] {self.nome} ({self.localita})"
+
+    def __hash__(self): #per creare un dizionario di connessioni che abbia come chiavi degli oggetti rifugio
+        return hash(self.id)
+
+
 
